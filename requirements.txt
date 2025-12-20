@@ -1,7 +1,7 @@
-
 streamlit
 crewai
 langchain_groq
 langchain_community
-duckduckgo-search==6.1.0
+duckduckgo-search==5.3.1
 language_tool_python
+

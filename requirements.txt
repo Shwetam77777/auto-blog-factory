@@ -1,0 +1,6 @@
+streamlit
+crewai
+langchain_groq
+langchain_community
+duckduckgo-search
+language_tool_python

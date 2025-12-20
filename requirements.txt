@@ -1,7 +1,6 @@
 streamlit
 crewai
 langchain_groq
+langchain_google_genai
 langchain_community
 duckduckgo-search==5.3.1
-language_tool_python
-

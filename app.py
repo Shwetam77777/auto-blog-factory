@@ -1,140 +1,117 @@
 import streamlit as st
 import os
-from crewai import Agent, Task, Crew, Process
+from crewai import Agent, Task, Crew
 from langchain_community.tools import DuckDuckGoSearchRun
 from langchain_groq import ChatGroq
 from langchain_google_genai import ChatGoogleGenerativeAI
 
-# --- CONFIG & KEYS ---
-st.set_page_config(page_title="Viral Content Generator", page_icon="🔥", layout="wide")
-st.title("🔥 Viral Content Factory (Fiverr Mode)")
-st.markdown("Generates: **Blog + LinkedIn + Twitter + Instagram** from one topic.")
+# --- CONFIGURATION ---
+st.set_page_config(page_title="Viral Content Engine", page_icon="⚡", layout="wide")
+st.title("⚡ Viral Content Factory")
+st.markdown("Generates **Blog + LinkedIn + Twitter + Instagram** assets instantly.")
 
-# Fix for search tool
+# Fix for search tool error
 os.environ["SCARF_NO_ANALYTICS"] = "true"
 
-# Sidebar for Keys (Client ya aapki apni keys)
-with st.sidebar:
-    st.header("🔑 API Keys")
-    groq_key = st.text_input("Groq API Key (Required)", type="password")
-    gemini_key = st.text_input("Gemini API Key (Optional for Review)", type="password")
-    
-    st.info("💡 Tip: Groq Llama-3 is Free & fast.")
+# --- SILENT AUTHENTICATION ---
+# The app checks the internal safe (Secrets) for keys.
+# No boxes on screen. Clean and Professional.
 
-if not groq_key:
-    st.warning("Please enter Groq API Key to start.")
+try:
+    groq_key = st.secrets["GROQ_API_KEY"]
+    gemini_key = st.secrets["GEMINI_API_KEY"]
+except FileNotFoundError:
+    st.error("⚠️ Setup Error: Keys are missing in Secrets.")
+    st.stop()
+except KeyError:
+    st.error("⚠️ Setup Error: Please add GROQ_API_KEY and GEMINI_API_KEY to Streamlit Secrets.")
     st.stop()
 
-# --- BRAINS ---
-# Main Writer (Llama 3 - Best for Creative Writing)
+# --- THE BRAINS ---
+# Main Writer (Llama 3 - Free & Fast)
 llm_writer = ChatGroq(
     temperature=0.7, 
     model_name="llama3-70b-8192", 
     api_key=groq_key
 )
 
-# Optional Reviewer
-if gemini_key:
-    llm_reviewer = ChatGoogleGenerativeAI(model="gemini-pro", google_api_key=gemini_key)
-else:
-    llm_reviewer = llm_writer # Agar Gemini nahi hai to Groq hi review karega
-
-# --- AGENTS ---
+# --- THE AGENTS ---
 
 search_tool = DuckDuckGoSearchRun()
 
-# 1. The Trend Hunter
+# 1. Trend Researcher
 researcher = Agent(
     role='Viral Strategist',
-    goal='Find what is trending about {topic} and high-click keywords.',
-    backstory="You analyze viral hooks. You don't just find facts, you find 'Angles' that get clicks.",
+    goal='Find high-performing angles and keywords for {topic}.',
+    backstory="You are a digital marketing expert. You find what people are actually clicking on right now.",
     tools=[search_tool],
     llm=llm_writer,
     verbose=True
 )
 
-# 2. The Omni-Channel Writer
+# 2. Content Creator
 writer = Agent(
-    role='Social Media Ghostwriter',
-    goal='Write content tailored for 4 different platforms.',
-    backstory="""
-    You are a master copywriter.
-    - Blogs: SEO optimized, storytelling.
-    - LinkedIn: Professional, short paragraphs, strong hooks.
-    - Twitter: Punchy, thread format.
-    - Instagram: Engaging caption with hashtags.
-    """,
+    role='Social Media Copywriter',
+    goal='Create a complete content pack (Blog, LinkedIn, Twitter, Insta).',
+    backstory="You write punchy, engaging content. You hate boring corporate speak.",
     llm=llm_writer,
     verbose=True
 )
 
-# --- WORKFLOW ---
-
-def run_viral_factory(topic):
-    # Task 1: Research
-    t1 = Task(
-        description=f"Research {topic}. Find 3 viral hooks/angles and 5 high-volume keywords.",
+# --- THE WORKFLOW ---
+def run_factory(topic):
+    task1 = Task(
+        description=f"Research {topic}. Identify 3 viral angles and 5 trending keywords.",
         agent=researcher,
-        expected_output="List of hooks and keywords."
+        expected_output="Bullet points of viral angles."
     )
 
-    # Task 2: Create Content Pack
-    t2 = Task(
+    task2 = Task(
         description=f"""
-        Using the research, create a CONTENT BUNDLE for topic: {topic}.
+        Create a VIRAL CONTENT PACK for: '{topic}'.
         
-        SECTION 1: MEDIUM BLOG POST (1000 words)
-        - Catchy Title
-        - SEO Headers (H2, H3)
-        - Conclusion
-        
-        SECTION 2: LINKEDIN POST
-        - Hook (First line must grab attention)
-        - Value body (bullet points)
-        - Call to Action
-        
-        SECTION 3: TWITTER THREAD (5 Tweets)
-        - Tweet 1: The Hook
-        - Tweet 2-4: The Value
-        - Tweet 5: The Conclusion
-        
-        SECTION 4: INSTAGRAM CAPTION
-        - Engaging short summary
-        - 10-15 Hashtags
+        1. **MEDIUM BLOG** (800 words): Catchy title, H2 headers, storytelling style.
+        2. **LINKEDIN POST**: Strong hook (first sentence), whitespace formatting, Call to Action.
+        3. **TWITTER THREAD**: 5 tweets. Tweet 1 is the hook.
+        4. **INSTAGRAM**: Caption with emojis and 15 hashtags.
         """,
         agent=writer,
-        expected_output="A full markdown document with all 4 sections."
+        expected_output="Complete markdown content pack."
     )
 
     crew = Crew(
         agents=[researcher, writer],
-        tasks=[t1, t2],
+        tasks=[task1, task2],
         verbose=2
     )
-    
     return crew.kickoff()
 
-# --- UI ---
+# --- THE INTERFACE ---
+# Simple, clean input box. No settings clutter.
 
-topic = st.text_input("Enter Topic (e.g. 'AI for Passive Income'):")
+topic = st.text_input("Enter Topic (e.g. 'How to start Freelancing'):", placeholder="Type your topic here...")
 
 if st.button("🚀 Generate Content Pack"):
-    with st.spinner('Generating Viral Content...'):
+    with st.spinner('🔍 Analyzing Trends & Writing Content...'):
         try:
-            result = run_viral_factory(topic)
+            result = run_factory(topic)
             
-            # Display Results
-            st.success("Content Generated!")
-            st.markdown("### Preview:")
-            st.markdown(result)
+            # Show success and results
+            st.success("✅ Content Generated Successfully!")
             
-            # Download Button (Deliverable for Fiverr)
-            st.download_button(
-                label="📥 Download Final File (For Client)",
-                data=str(result),
-                file_name=f"{topic}_Viral_Pack.md",
-                mime="text/markdown"
-            )
+            tab1, tab2 = st.tabs(["📄 Preview", "💾 Download"])
             
+            with tab1:
+                st.markdown(result)
+            
+            with tab2:
+                st.markdown("### Ready for Delivery")
+                st.download_button(
+                    label="📥 Download Final Report (.md)",
+                    data=str(result),
+                    file_name=f"Viral_Content_{topic}.md",
+                    mime="text/markdown"
+                )
+                
         except Exception as e:
-            st.error(f"Error: {e}")
+            st.error(f"Something went wrong: {e}")

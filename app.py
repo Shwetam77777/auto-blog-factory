@@ -1,117 +1,73 @@
 import streamlit as st
 import os
-from crewai import Agent, Task, Crew
-from langchain_community.tools import DuckDuckGoSearchRun
-from langchain_groq import ChatGroq
-from langchain_google_genai import ChatGoogleGenerativeAI
 
-# --- CONFIGURATION ---
-st.set_page_config(page_title="Viral Content Engine", page_icon="⚡", layout="wide")
+# --- PAGE SETUP ---
+st.set_page_config(page_title="Viral Content Factory", page_icon="⚡")
 st.title("⚡ Viral Content Factory")
-st.markdown("Generates **Blog + LinkedIn + Twitter + Instagram** assets instantly.")
 
-# Fix for search tool error
-os.environ["SCARF_NO_ANALYTICS"] = "true"
-
-# --- SILENT AUTHENTICATION ---
-# The app checks the internal safe (Secrets) for keys.
-# No boxes on screen. Clean and Professional.
-
+# --- SECRETS LOAD ---
 try:
-    groq_key = st.secrets["GROQ_API_KEY"]
-    gemini_key = st.secrets["GEMINI_API_KEY"]
-except FileNotFoundError:
-    st.error("⚠️ Setup Error: Keys are missing in Secrets.")
+    if "GROQ_API_KEY" in st.secrets:
+        os.environ["GROQ_API_KEY"] = st.secrets["GROQ_API_KEY"]
+    if "GEMINI_API_KEY" in st.secrets:
+        os.environ["GOOGLE_API_KEY"] = st.secrets["GEMINI_API_KEY"]
+except:
+    st.info("⚠️ Secrets not found. Please add keys in Settings.")
     st.stop()
-except KeyError:
-    st.error("⚠️ Setup Error: Please add GROQ_API_KEY and GEMINI_API_KEY to Streamlit Secrets.")
-    st.stop()
 
-# --- THE BRAINS ---
-# Main Writer (Llama 3 - Free & Fast)
-llm_writer = ChatGroq(
-    temperature=0.7, 
-    model_name="llama3-70b-8192", 
-    api_key=groq_key
-)
+# --- SAFETY BLOCK FOR TOOLS (NO MORE RED BOX) ---
+from crewai import Agent, Task, Crew
+from langchain_groq import ChatGroq
 
-# --- THE AGENTS ---
+# Try to load Search, if fail, use Dummy (Prevents Crash)
+try:
+    from langchain_community.tools import DuckDuckGoSearchRun
+    search_tool = DuckDuckGoSearchRun()
+    st.toast("✅ Search Tool Loaded", icon="🟢")
+except Exception as e:
+    st.warning(f"⚠️ Search tool failed to load ({e}). Using AI Knowledge only.")
+    # Dummy tool to keep agents working
+    from langchain.tools import tool
+    @tool("Search")
+    def search_tool(query: str):
+        """Fallback tool when search fails."""
+        return "Search data unavailable. Use internal knowledge."
 
-search_tool = DuckDuckGoSearchRun()
+# --- BRAIN ---
+llm = ChatGroq(temperature=0.7, model_name="llama3-70b-8192")
 
-# 1. Trend Researcher
+# --- AGENTS ---
 researcher = Agent(
-    role='Viral Strategist',
-    goal='Find high-performing angles and keywords for {topic}.',
-    backstory="You are a digital marketing expert. You find what people are actually clicking on right now.",
-    tools=[search_tool],
-    llm=llm_writer,
+    role='Viral Researcher',
+    goal='Find angles for {topic}',
+    backstory="You are a trend hunter.",
+    tools=[search_tool], # Uses safety tool if main crashes
+    llm=llm,
     verbose=True
 )
 
-# 2. Content Creator
 writer = Agent(
-    role='Social Media Copywriter',
-    goal='Create a complete content pack (Blog, LinkedIn, Twitter, Insta).',
-    backstory="You write punchy, engaging content. You hate boring corporate speak.",
-    llm=llm_writer,
+    role='Viral Writer',
+    goal='Create Blog, LinkedIn & Twitter content.',
+    backstory="You write viral hooks.",
+    llm=llm,
     verbose=True
 )
 
-# --- THE WORKFLOW ---
+# --- WORKFLOW ---
 def run_factory(topic):
-    task1 = Task(
-        description=f"Research {topic}. Identify 3 viral angles and 5 trending keywords.",
-        agent=researcher,
-        expected_output="Bullet points of viral angles."
-    )
-
-    task2 = Task(
-        description=f"""
-        Create a VIRAL CONTENT PACK for: '{topic}'.
-        
-        1. **MEDIUM BLOG** (800 words): Catchy title, H2 headers, storytelling style.
-        2. **LINKEDIN POST**: Strong hook (first sentence), whitespace formatting, Call to Action.
-        3. **TWITTER THREAD**: 5 tweets. Tweet 1 is the hook.
-        4. **INSTAGRAM**: Caption with emojis and 15 hashtags.
-        """,
-        agent=writer,
-        expected_output="Complete markdown content pack."
-    )
-
-    crew = Crew(
-        agents=[researcher, writer],
-        tasks=[task1, task2],
-        verbose=2
-    )
+    t1 = Task(description=f"Find 3 viral hooks for: {topic}", agent=researcher, expected_output="List of hooks")
+    t2 = Task(description=f"Write LinkedIn Post, Twitter Thread & Blog for: {topic}", agent=writer, expected_output="Content Pack")
+    crew = Crew(agents=[researcher, writer], tasks=[t1, t2], verbose=2)
     return crew.kickoff()
 
-# --- THE INTERFACE ---
-# Simple, clean input box. No settings clutter.
-
-topic = st.text_input("Enter Topic (e.g. 'How to start Freelancing'):", placeholder="Type your topic here...")
-
-if st.button("🚀 Generate Content Pack"):
-    with st.spinner('🔍 Analyzing Trends & Writing Content...'):
+# --- UI ---
+topic = st.text_input("Enter Topic (e.g. AI Marketing):")
+if st.button("Generate Content"):
+    with st.spinner('Thinking...'):
         try:
             result = run_factory(topic)
-            
-            # Show success and results
-            st.success("✅ Content Generated Successfully!")
-            
-            tab1, tab2 = st.tabs(["📄 Preview", "💾 Download"])
-            
-            with tab1:
-                st.markdown(result)
-            
-            with tab2:
-                st.markdown("### Ready for Delivery")
-                st.download_button(
-                    label="📥 Download Final Report (.md)",
-                    data=str(result),
-                    file_name=f"Viral_Content_{topic}.md",
-                    mime="text/markdown"
-                )
-                
+            st.success("Done!")
+            st.markdown(result)
         except Exception as e:
-            st.error(f"Something went wrong: {e}")
+            st.error(f"Error: {e}")

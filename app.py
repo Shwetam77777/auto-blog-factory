@@ -160,3 +160,4 @@ if st.button("✨ Generate Selected Content"):
                 
             except Exception as e:
                 st.error(f"Error: {e}")
+
